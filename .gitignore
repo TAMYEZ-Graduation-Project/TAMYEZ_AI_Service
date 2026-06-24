@@ -1,0 +1,15 @@
+venv/
+.env
+__pycache__/
+*.pyc
+*.pyd
+*.exe
+*.dll
+*.libvenv/
+.env
+__pycache__/
+*.pyc
+venv/
+.env
+__pycache__/
+*.pyc
