@@ -1,3 +1,5 @@
+import os
+os.environ["LITELLM_DROP_PARAMS"] = "true"  
 import json
 import re
 from fastapi import FastAPI, HTTPException
