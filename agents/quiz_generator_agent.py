@@ -8,6 +8,7 @@ def create_quiz_generator_agent():
     llm = LLM(
         model="groq/llama-3.3-70b-versatile",
         api_key=os.getenv("GROQ_API_KEY")
+        cache_control=False
     )
 
     return Agent(
