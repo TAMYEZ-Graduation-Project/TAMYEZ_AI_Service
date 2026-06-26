@@ -13,13 +13,21 @@ def generate_main_quiz(num_questions: int, language: str):
     agent = create_quiz_generator_agent()
     task = Task(
         description=f"""Generate {num_questions} career assessment quiz questions in {language}.
-        Mix the questions between:
-        - mcq-single: one correct answer
-        - mcq-multi: multiple correct answers
-        - written: open ended question
-        
+
+        You MUST follow this exact distribution:
+        - 4 questions: Personality & Work Style (mcq-single or mcq-multi)
+        - 4 questions: Technical Aptitude (mcq-single only, with ONE correct answer)
+        - 2 questions: Interest & Direction (written only)
+
+        Technical Aptitude questions must test:
+        - Logical thinking and pattern recognition
+        - Data interpretation ability
+        - Algorithmic thinking
+        - Attention to detail
+        These test raw potential, NOT prior programming knowledge.
+
         Each MCQ question must have exactly 4 options with ids: optA, optB, optC, optD.
-        
+
         Return ONLY a valid JSON in this exact format:
         {{
             "questions": [
@@ -27,17 +35,23 @@ def generate_main_quiz(num_questions: int, language: str):
                     "id": "unique_id_here",
                     "text": "question text here",
                     "type": "mcq-single",
+                    "category": "technical_aptitude",
                     "options": [
                         {{"id": "optA", "text": "option A text"}},
                         {{"id": "optB", "text": "option B text"}},
                         {{"id": "optC", "text": "option C text"}},
                         {{"id": "optD", "text": "option D text"}}
-                    ]
+                    ],
+                    "correctAnswer": ["optB"]
                 }}
             ]
         }}
-        For written questions, do not include options field.
-        Return ONLY the JSON, no extra text.""",
+
+        Rules:
+        - written questions: no options, no correctAnswer
+        - technical_aptitude questions: MUST include correctAnswer
+        - personality questions: no correctAnswer needed
+        - Return ONLY the JSON, no extra text.""",
         expected_output="A valid JSON object containing the quiz questions",
         agent=agent
     )
@@ -72,7 +86,7 @@ def evaluate_and_match(answers: list, careers: list):
     ])
 
     task = Task(
-        description=f"""Analyze the following student answers and suggest the top 3 most suitable careers.
+    description=f"""Analyze the following student answers and suggest the top 3 most suitable careers.
 
         Available Careers (ONLY suggest from this list):
         {careers_text}
@@ -99,10 +113,13 @@ def evaluate_and_match(answers: list, careers: list):
         - Suggest exactly 3 careers
         - confidence is integer between 0 and 100
         - reason must be specific to the student actual answers
-        - user_level must be: beginner / intermediate / advanced
+        - user_level must be determined SPECIFICALLY from technical aptitude answers:
+          * Student answered 3-4 technical questions correctly → advanced
+          * Student answered 2 technical questions correctly → intermediate
+          * Student answered 0-1 technical questions correctly → beginner
         - Return ONLY the JSON, no extra text.""",
-        expected_output="Valid JSON with top 3 suggested careers and user_level",
-        agent=agent
+    expected_output="Valid JSON with top 3 suggested careers and user_level",
+    agent=agent
     )
 
     crew = Crew(agents=[agent], tasks=[task], verbose=True)
@@ -112,13 +129,18 @@ def evaluate_and_match(answers: list, careers: list):
 def generate_sub_quiz(topic: str, career: str, level: str, num_questions: int):
     agent = create_sub_quiz_agent()
     task = Task(
-        description=f"""Generate {num_questions} quiz questions about the following topic.
+    description=f"""Generate {num_questions} quiz questions about the following topic.
 
         Topic: {topic}
         Career Track: {career}
         Student Level: {level}
 
         Mix between mcq-single and written questions.
+
+        Level guidelines:
+        - beginner: focus on definitions and basic concepts, simple scenarios
+        - intermediate: focus on how and why, application and problem-solving
+        - advanced: focus on tradeoffs, best practices, optimization, edge cases
 
         Return ONLY a valid JSON in this exact format:
         {{
@@ -142,10 +164,11 @@ def generate_sub_quiz(topic: str, career: str, level: str, num_questions: int):
         Rules:
         - For written questions: no options, no correctAnswer, no explanation
         - For mcq-single: always include correctAnswer and explanation
+        - Questions MUST match the student level exactly
         - Return ONLY the JSON, no extra text.""",
-        expected_output="A valid JSON object containing the quiz questions",
-        agent=agent
-    )
+    expected_output="A valid JSON object containing the quiz questions",
+    agent=agent
+)
     crew = Crew(agents=[agent], tasks=[task], verbose=True)
     return str(crew.kickoff())
 
@@ -157,7 +180,7 @@ def evaluate_written_answers(topic: str, career: str, level: str, answers: list)
         for i, a in enumerate(answers)
     ])
     task = Task(
-        description=f"""Evaluate these written answers.
+    description=f"""Evaluate these written answers.
         Topic: {topic} | Career: {career} | Level: {level}
 
         {answers_text}
@@ -166,7 +189,6 @@ def evaluate_written_answers(topic: str, career: str, level: str, answers: list)
         {{
             "evaluations": [
                 {{
-                    "question_id": "id here"
                     "question": "question text",
                     "student_answer": "student answer",
                     "score": 75,
@@ -176,13 +198,19 @@ def evaluate_written_answers(topic: str, career: str, level: str, answers: list)
             "overall_score": 75,
             "overall_feedback": "Summary of performance"
         }}
+
         Rules:
         - score integer 0-100
+        - Passing score depends on level:
+          * beginner: 60+ is passing
+          * intermediate: 70+ is passing
+          * advanced: 80+ is passing
         - overall_score = average of all scores
+        - feedback must mention what was correct AND what was missing
         - feedback in same language as student answer
-        Return ONLY the JSON.""",
-        expected_output="Valid JSON with scores and feedback",
-        agent=agent
+        - Return ONLY the JSON.""",
+    expected_output="Valid JSON with scores and feedback",
+    agent=agent
     )
     crew = Crew(agents=[agent], tasks=[task], verbose=True)
     return str(crew.kickoff())
